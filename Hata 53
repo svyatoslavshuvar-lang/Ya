@@ -1,0 +1,221 @@
+
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#101019">
+<title>Hata53</title>
+<style>
+*{box-sizing:border-box}
+body{
+ margin:0;background:#101019;color:white;
+ font-family:Arial,sans-serif;
+}
+header{
+ padding:22px;background:#191927;
+ display:flex;justify-content:space-between;
+ align-items:center;
+ border-bottom:1px solid #303044;
+}
+.logo{font-size:27px;font-weight:bold;color:#a78bfa}
+button{
+ background:#7655dc;color:white;border:0;
+ padding:12px 16px;border-radius:12px;
+ cursor:pointer;font-size:15px;
+}
+main{padding:15px}
+h2{font-size:21px}
+.chat{
+ display:flex;align-items:center;gap:13px;
+ padding:14px;background:#1b1b2a;
+ margin:10px 0;border-radius:15px;
+ cursor:pointer;
+}
+.avatar{
+ width:48px;height:48px;border-radius:50%;
+ background:#7655dc;display:grid;
+ place-items:center;font-size:20px;
+}
+.info{flex:1}
+.info p{margin:5px 0;color:#aaa;font-size:13px}
+#messages{
+ display:none;position:fixed;inset:0;
+ background:#101019;z-index:5;
+ flex-direction:column;
+}
+#messageList{flex:1;overflow:auto;padding:15px}
+.bubble{
+ background:#292940;padding:12px;
+ border-radius:14px;margin:9px 0;
+ max-width:80%;width:fit-content;
+ overflow-wrap:anywhere;
+}
+.mine{background:#7655dc;margin-left:auto}
+footer{
+ display:flex;gap:7px;padding:12px;
+ background:#191927;
+}
+input{
+ min-width:0;flex:1;background:#292940;
+ color:white;border:0;padding:13px;
+ border-radius:12px;
+}
+.small{color:#aaa;font-size:13px}
+</style>
+</head>
+<body>
+<header>
+ <div class="logo">🏠 Hata53</div>
+ <button onclick="newChat()">＋ Чат</button>
+</header>
+
+<main id="home">
+ <h2>Мої повідомлення</h2>
+ <div id="chats">
+  <div class="chat" onclick="openChat('Друзі')">
+   <div class="avatar">👥</div>
+   <div class="info">
+    <b>Друзі</b><p>Груповий чат</p>
+   </div>
+  </div>
+ </div>
+ <p class="small">Hata53 • Твій простір для спілкування</p>
+</main>
+
+<section id="messages">
+ <header>
+  <button onclick="closeChat()">←</button>
+  <b id="chatTitle">Чат</b>
+  <span>💬</span>
+ </header>
+ <div id="messageList"></div>
+ <footer>
+  <button onclick="document.getElementById('photo').click()">📷</button>
+  <input id="messageInput" placeholder="Повідомлення...">
+  <button onclick="sendMessage()">➤</button>
+  <button onclick="recordVoice()">🎙</button>
+ </footer>
+ <input type="file" id="photo" accept="image/*,video/*" hidden onchange="sendPhoto(event)">
+</section>
+
+<script>
+let currentChat="";
+let chats={};
+let recorder, chunks=[];
+
+function save(){
+ localStorage.setItem("hata53",JSON.stringify(chats));
+}
+function load(){
+ chats=JSON.parse(localStorage.getItem("hata53")||"{}");
+ Object.keys(chats).forEach(addChatButton);
+}
+function newChat(){
+ let name=prompt("Назва чату:");
+ if(!name)return;
+ if(chats[name])return alert("Такий чат уже існує");
+ chats[name]=[];
+ save();addChatButton(name);
+}
+function addChatButton(name){
+ let el=document.createElement("div");
+ el.className="chat";
+ let av=document.createElement("div");
+ av.className="avatar";av.textContent="💬";
+ let info=document.createElement("div");
+ info.className="info";
+ let title=document.createElement("b");
+ title.textContent=name;
+ let sub=document.createElement("p");
+ sub.textContent="Відкрити чат";
+ info.append(title,sub);el.append(av,info);
+ el.onclick=()=>openChat(name);
+ document.getElementById("chats").append(el);
+}
+function openChat(name){
+ currentChat=name;
+ chats[name]??=[];
+ document.getElementById("chatTitle").textContent=name;
+ document.getElementById("messages").style.display="flex";
+ document.getElementById("home").style.display="none";
+ render();
+}
+function closeChat(){
+ document.getElementById("messages").style.display="none";
+ document.getElementById("home").style.display="block";
+}
+function render(){
+ let box=document.getElementById("messageList");
+ box.innerHTML="";
+ (chats[currentChat]||[]).forEach(m=>{
+  let el=document.createElement("div");
+  el.className="bubble mine";
+  if(m.type==="text")el.textContent=m.value;
+  if(m.type==="photo"){
+   let media=document.createElement(m.video?"video":"img");
+   media.src=m.value;
+   media.style.maxWidth="100%";
+   media.controls=!!m.video;
+   el.append(media);
+  }
+  if(m.type==="voice"){
+   let audio=document.createElement("audio");
+   audio.src=m.value;audio.controls=true;
+   el.append(audio);
+  }
+  box.append(el);
+ });
+ box.scrollTop=box.scrollHeight;
+}
+function sendMessage(){
+ let input=document.getElementById("messageInput");
+ let value=input.value.trim();
+ if(!value)return;
+ chats[currentChat].push({type:"text",value});
+ input.value="";save();render();
+}
+function sendPhoto(e){
+ let file=e.target.files[0];if(!file)return;
+ let reader=new FileReader();
+ reader.onload=()=>{
+  chats[currentChat].push({
+   type:"photo",value:reader.result,
+   video:file.type.startsWith("video/")
+  });
+  save();render();
+ };
+ reader.readAsDataURL(file);e.target.value="";
+}
+async function recordVoice(){
+ try{
+  if(recorder&&recorder.state==="recording"){
+   recorder.stop();return;
+  }
+  let stream=await navigator.mediaDevices.getUserMedia({audio:true});
+  recorder=new MediaRecorder(stream);chunks=[];
+  recorder.ondataavailable=e=>chunks.push(e.data);
+  recorder.onstop=()=>{
+   let blob=new Blob(chunks);
+   let reader=new FileReader();
+   reader.onload=()=>{
+    chats[currentChat].push({
+     type:"voice",value:reader.result
+    });
+    save();render();
+   };
+   reader.readAsDataURL(blob);
+   stream.getTracks().forEach(t=>t.stop());
+  };
+  recorder.start();
+  alert("Запис триває. Натисни 🎙 ще раз для завершення.");
+ }catch(e){alert("Не вдалося отримати доступ до мікрофона");}
+}
+document.getElementById("messageInput")
+.addEventListener("keydown",e=>{
+ if(e.key==="Enter")sendMessage();
+});
+load();
+</script>
+</body>
+</html>
